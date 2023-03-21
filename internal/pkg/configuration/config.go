@@ -12,12 +12,13 @@ import (
 	"time"
 )
 
-const CONF_FILE_ENV_VAR = "DAGINIT_CONF"
 const DEFAULT_CONF_FILE = "./daginit.conf"
+const EV_CONF_FILE = "DAGINIT_CONF"
 const EV_COOKIE = "DAGINIT_COOKIE"
+const EV_LOG_STDERR = "DAGINIT_LOG_STDERR"
+const EV_LOG_STDOUT = "DAGINIT_LOG_STDOUT"
 const EV_RELEASE_ROOT = "DAGINIT_RELROOT"
 const EV_RELEASE_VERSION = "DAGINIT_RELVSN"
-const EV_SAVEOUTERR = "DAGINIT_SAVE_OUT_ERR"
 const LOG_FLAGS = log.Ldate | log.Ltime
 
 var cookieChars = []string{
@@ -45,7 +46,9 @@ type Configuration struct {
 	Cookie         string `json:"cookie"`
 	ReleaseRoot    string `json:"release_root"`
 	ReleaseVersion string `json:"release_version"`
-	SaveStdOutErr  bool   `json:"save_std_out_err"`
+	LogStdOut      bool   `json:"log_stdout"`
+	LogStdErr      bool   `json:"log_stderr"`
+	Verbose        bool   `json:"verbose"`
 }
 
 func (l *Logger) Debug(format string, v ...any) {
@@ -116,8 +119,10 @@ func defaultConfiguration(logger *Logger) *Configuration {
 	return &Configuration{
 		Cookie:         generateCookie(rg, rg.Intn(21)+9),
 		ReleaseRoot:    "./relroot",
-		ReleaseVersion: "0.1.0",
-		SaveStdOutErr:  false,
+		ReleaseVersion: "",
+		LogStdOut:      false,
+		LogStdErr:      false,
+		Verbose:        false,
 		Logger:         logger,
 	}
 }
@@ -156,7 +161,7 @@ func convertBoolean(value string) (bool, error) {
 func applyEnvVars(configuration *Configuration) error {
 	var err error = nil
 	var converted bool
-	names := []string{EV_COOKIE, EV_RELEASE_ROOT, EV_RELEASE_VERSION, EV_SAVEOUTERR}
+	names := []string{EV_COOKIE, EV_RELEASE_ROOT, EV_RELEASE_VERSION, EV_LOG_STDOUT, EV_LOG_STDERR}
 	for _, name := range names {
 		value, exists := os.LookupEnv(name)
 		if exists {
@@ -167,10 +172,15 @@ func applyEnvVars(configuration *Configuration) error {
 				configuration.ReleaseRoot = value
 			case EV_RELEASE_VERSION:
 				configuration.ReleaseVersion = value
-			case EV_SAVEOUTERR:
+			case EV_LOG_STDOUT:
 				converted, err = convertBoolean(value)
 				if err == nil {
-					configuration.SaveStdOutErr = converted
+					configuration.LogStdOut = converted
+				}
+			case EV_LOG_STDERR:
+				converted, err = convertBoolean(value)
+				if err == nil {
+					configuration.LogStdErr = converted
 				}
 			}
 		}
@@ -178,12 +188,14 @@ func applyEnvVars(configuration *Configuration) error {
 	return err
 }
 
-func Load() (*Configuration, error) {
-	var configFile string
+func Load(configFile string) (*Configuration, error) {
 	logger := setupLogger()
-	configFile, exists := os.LookupEnv(CONF_FILE_ENV_VAR)
-	if !exists {
-		configFile = DEFAULT_CONF_FILE
+	if configFile == "" {
+		var exists bool
+		configFile, exists = os.LookupEnv(EV_CONF_FILE)
+		if !exists {
+			configFile = DEFAULT_CONF_FILE
+		}
 	}
 	logger.Info("Using configuration file %s", configFile)
 	contents, err := readFile(configFile, logger)

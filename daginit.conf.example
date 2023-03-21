@@ -1,0 +1,8 @@
+{
+    "release_root": "/path/to/my/release",
+    "release_version": "1.0.0",
+    "cookie": "very-secret-secure-cookie",
+    "log_stdout": true,
+    "log_stderr": true,
+    "verbose": true
+}
